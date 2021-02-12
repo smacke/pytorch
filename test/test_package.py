@@ -82,6 +82,24 @@ the_math = math
         self.assertEqual(package_a_i.result, 'package_a')
         self.assertIsNot(package_a_i, package_a)
 
+    def test_print_file_structure(self):
+        filename = self.temp()
+        with PackageExporter(filename, verbose=False) as he:
+            import module_a
+            import package_a
+            import package_a.subpackage
+            obj = package_a.subpackage.PackageASubpackageObject()
+            he.save_module(module_a.__name__)
+            he.save_module(package_a.__name__)
+            he.save_pickle('obj', 'obj.pkl', obj)
+            he.save_text('main', 'main', "my string")
+            export_file_structure = he.print_file_structure()
+            export_file_structure_i_e = he.print_file_structure("*.py", exclude="*module*")
+
+        hi = PackageImporter(filename)
+        import_file_structure = hi.print_file_structure()
+        import_file_structure_i_e = hi.print_file_structure(".data/**", exclude="*extern*")
+
     def test_save_module_binary(self):
         f = BytesIO()
         with PackageExporter(f, verbose=False) as he:

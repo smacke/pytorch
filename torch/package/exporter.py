@@ -4,6 +4,7 @@ import io
 import pickletools
 from .find_file_dependencies import find_files_source_depends_on
 from ._custom_import_pickler import create_custom_import_pickler, import_module_from_importers
+from ._file_structure_printer import _print_file_structure
 from ._importlib import _normalize_path
 from ._mangling import is_mangled
 from ._stdlib import is_stdlib_module
@@ -124,6 +125,9 @@ class PackageExporter:
         else:
             is_package = path.name == '__init__.py'
             self.save_source_string(module_name, _read_file(file_or_directory), is_package, dependencies, file_or_directory)
+
+    def print_file_structure(self, include: str = "**", *, exclude: str = "") -> str:
+        return _print_file_structure(self.zip_file.archive_name() , self.zip_file.get_all_written_records(), include, exclude) 
 
     def save_source_string(self, module_name: str, src: str, is_package: bool = False,
                            dependencies: bool = True, orig_file_name: str = None):
