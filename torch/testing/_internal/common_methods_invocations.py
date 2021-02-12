@@ -358,6 +358,21 @@ def sample_inputs_tensor_split(op_info, device, dtype, requires_grad):
                         args=(torch.tensor([1, 2, 3]),),
                         kwargs=dict(dim=1)),)
 
+def sample_inputs_linalg_multi_dot(op_info, device, dtype, requires_grad):
+    test_cases = [
+        [(2,), (2,)],
+        [(1, 2), (2, 1)],
+        [(2, 3), (3, 2), (2, 4)],
+    ]
+
+    result = []
+    for test_case in test_cases:
+        tensors = [make_tensor(size, device, dtype, low=None, high=None, requires_grad=requires_grad)
+                   for size in test_case]
+        result.append(SampleInput(tuple(tensors)))
+
+    return tuple(result)
+
 def sample_inputs_linalg_norm(op_info, device, dtype, requires_grad):
     test_sizes = [
         (S,),
@@ -1704,6 +1719,24 @@ op_db: List[OpInfo] = [
            decorators=[_wrap_maybe_warns("floor_divide is deprecated, and will be removed")],
            supports_autograd=False,
            ),
+    OpInfo('linalg.multi_dot',
+           # gradcheck expects the input arguments as a flat list (see https://github.com/pytorch/pytorch/issues/51996)
+           op=lambda *args, out=None: torch.linalg.multi_dot(args, out=out),
+           dtypes=floating_and_complex_types_and(torch.half),
+           dtypesIfCPU=all_types_and_complex_and(torch.half, torch.bfloat16),
+           test_inplace_grad=False,
+           supports_tensor_out=True,
+           sample_inputs_func=sample_inputs_linalg_multi_dot,
+           aten_name='linalg_multi_dot',
+           skips=(
+               # These call into check_alias_annotation which does not support TensorList inputs
+               SkipInfo('TestCommon', 'test_variant_consistency_jit', 
+                        dtypes=[torch.float32, torch.int32]),
+               # TODO: this is failing with AssertionError: False is not true
+               SkipInfo('TestCommon', 'test_variant_consistency_jit',
+                        device_type='cuda',
+                        dtypes=[torch.float16]),
+           )),
     OpInfo('linalg.norm',
            op=torch.linalg.norm,
            dtypes=floating_and_complex_types_and(torch.float16, torch.bfloat16),
@@ -2149,7 +2182,7 @@ op_db: List[OpInfo] = [
            ),
            sample_inputs_func=sample_inputs_index_select),
     OpInfo('stack',
-           # gradcheck expects the input arguments as a flat list
+           # gradcheck expects the input arguments as a flat list (see https://github.com/pytorch/pytorch/issues/51996)
            op=lambda *args, idx: torch.stack([*args], idx),
            dtypes=all_types_and_complex_and(torch.bool, torch.float16, torch.bfloat16),
            test_inplace_grad=False,
@@ -2160,7 +2193,7 @@ op_db: List[OpInfo] = [
            ),
            sample_inputs_func=sample_inputs_stack),
     OpInfo('hstack',
-           # gradcheck expects the input arguments as a flat list
+           # gradcheck expects the input arguments as a flat list (see https://github.com/pytorch/pytorch/issues/51996)
            op=lambda *args: torch.hstack([*args]),
            dtypes=all_types_and_complex_and(torch.bool, torch.float16, torch.bfloat16),
            test_inplace_grad=False,
@@ -2171,7 +2204,7 @@ op_db: List[OpInfo] = [
            ),
            sample_inputs_func=sample_inputs_hstack_dstack_vstack),
     OpInfo('vstack',
-           # gradcheck expects the input arguments as a flat list
+           # gradcheck expects the input arguments as a flat list (see https://github.com/pytorch/pytorch/issues/51996)
            op=lambda *args: torch.vstack([*args]),
            dtypes=all_types_and_complex_and(torch.bool, torch.float16, torch.bfloat16),
            test_inplace_grad=False,
@@ -2182,7 +2215,7 @@ op_db: List[OpInfo] = [
            ),
            sample_inputs_func=sample_inputs_hstack_dstack_vstack),
     OpInfo('dstack',
-           # gradcheck expects the input arguments as a flat list
+           # gradcheck expects the input arguments as a flat list (see https://github.com/pytorch/pytorch/issues/51996)
            op=lambda *args: torch.dstack([*args]),
            dtypes=all_types_and_complex_and(torch.bool, torch.float16, torch.bfloat16),
            test_inplace_grad=False,
