@@ -20,6 +20,7 @@ import torch.distributed as c10d
 import torch.distributed as dist
 import torch.distributed.algorithms.ddp_comm_hooks.default_hooks as default
 import torch.distributed.algorithms.ddp_comm_hooks.powerSGD_hook as powerSGD
+import torch.multiprocessing as mp
 import torch.nn.functional as F
 import torch.testing._internal.common_utils as common
 from torch import nn
@@ -81,6 +82,14 @@ def gpus_for_rank(world_size):
         )
     return gpus_for_rank
 
+def create_client(i, addr, port, world_size=-1, timeout=timedelta(seconds=10)):
+    if world_size < 0:
+        client_store = dist.TCPStore(addr, port, timeout=timeout)
+    else:
+        client_store = dist.TCPStore(addr, port, world_size, timeout=timeout)
+    client_store.get("key")
+    client_store.set("new_key", "new_value0")
+    client_store.compare_set("new_key", "new_value1", "new_value0")
 
 def simple_reduce_tests(rank, world_size):
     tests = [
@@ -353,6 +362,31 @@ class TCPStoreTest(TestCase, StoreTestBase):
         new_value_result = store.compare_set("key0", "value0", "new_value0")
         self.assertEqual(b"new_value0", new_value_result)
         self.assertEqual(b"new_value0", store.get("key0"))
+
+    def test_multi_worker_with_fixed_world_size(self):
+        addr = "localhost"
+        port = common.find_free_port()
+        world_size = 5
+        processes = []
+        for i in range(world_size):
+            p = mp.Process(target=create_client, args=(i, addr, port, world_size))
+            processes.append(p)
+            p.start()
+        server_store = dist.TCPStore(addr, port, world_size, True, timedelta(seconds=30))
+        server_store.set("key", "value")
+        for p in processes:
+            p.join()
+
+    def test_multi_worker_with_nonfixed_world_size(self):
+        addr = "localhost"
+        port = common.find_free_port()
+        server_store = dist.TCPStore(addr, port, is_master=True, timeout=timedelta(seconds=30))
+        server_store.set("key", "value")
+
+        # create and exit two different groups of workers
+        mp.start_processes(create_client, args=(addr, port), nprocs=random.randint(5, 10), start_method='fork')
+        mp.start_processes(create_client, args=(addr, port), nprocs=random.randint(5, 10), start_method='fork')
+
 
 class PrefixTCPStoreTest(TestCase, StoreTestBase):
     def setUp(self):
